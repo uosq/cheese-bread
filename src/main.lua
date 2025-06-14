@@ -95,28 +95,56 @@ local repo_pkgs = {}
 local finished_fetching = false
 local repo_count = 0
 
-filesystem.EnumerateDirectory(REPOS_PATH .. "*.json", function(filename, attributes)
-	repo_count = repo_count + 1
+local function EnumerateRepoDir()
+	repo_count = 0
+	filesystem.EnumerateDirectory(REPOS_PATH .. "*.json", function(filename, attributes)
+		repo_count = repo_count + 1
 
-	local path = REPOS_PATH .. filename
+		local path = REPOS_PATH .. filename
+		local file = io.open(path)
 
-	local file = io.open(path)
+		if file then
+			local contents = file:read("a")
+			local decoded = json.decode(contents)
 
-	if file then
-		local contents = json.decode(file:read("a"))
+			local repo_name = filename:gsub(".json", "")
 
-		local name = filename:gsub(".json", "")
+			printc(255, 255, 0, 255, "[Cheese Bread] Loading '" .. repo_name .. "' repo")
 
-		printc(255, 255, 0, 255, "[Cheese Bread] Loading '" .. name .. "' repo")
+			for _, v in ipairs(decoded) do
+				-- Sanity check for JSON file name matching the inner name
+				local file_name_no_ext = v.name:gsub("%.json$", "")
 
-		for _, v in ipairs(contents) do
-			---@diagnostic disable-next-line: param-type-mismatch
-			table.insert(repo_pkgs, v)
+				local pkg_content_raw = http.Get(v.download_url)
+				if pkg_content_raw then
+					local pkg_content = json.decode(pkg_content_raw)
+
+					if pkg_content and pkg_content.name ~= file_name_no_ext then
+						printc(
+							255,
+							0,
+							0,
+							255,
+							string.format(
+								"[Cheese Bread] Name mismatch: file '%s' has 'name' field '%s'. Skipping this package",
+								v.name,
+								pkg_content and pkg_content.name or "?"
+							)
+						)
+					else
+						repo_pkgs[#repo_pkgs + 1] = v
+					end
+				else
+					printc(255, 128, 0, 255, string.format("[Cheese Bread] Failed to download package '%s'", v.name))
+				end
+			end
+
+			file:close()
 		end
+	end)
+end
 
-		file:close()
-	end
-end)
+EnumerateRepoDir()
 
 if repo_count > 0 then
 	finished_fetching = true
@@ -298,25 +326,7 @@ local function SyncRepo()
 	printc(140, 255, 251, 255, "[Cheese Bread] Fetching repo...")
 	repo_pkgs = {}
 
-	filesystem.EnumerateDirectory(REPOS_PATH .. "*.json", function(filename, attributes)
-		local path = REPOS_PATH .. filename
-
-		local file = io.open(path)
-
-		if file then
-			local contents = json.decode(file:read("a"))
-
-			local name = filename:gsub(".json", "")
-
-			printc(255, 255, 0, 255, "[Cheese Bread] Loading '" .. name .. "' repo")
-
-			for _, v in ipairs(contents) do
-				repo_pkgs[#repo_pkgs + 1] = v
-			end
-
-			file:close()
-		end
-	end)
+	EnumerateRepoDir()
 
 	filesystem.EnumerateDirectory(SCRIPT_PATH .. "*.lua", function(filename, attributes)
 		local pkg = GetPkgFromRepo(filename:gsub(".json", ""))
