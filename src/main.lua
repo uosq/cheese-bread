@@ -9,13 +9,6 @@ cb stop pkg
 cb list
 cb | cb help
 
-
-printc(255, 255, 255, 255, "cb install pkg")
-printc(255, 255, 255, 255, "cb remove pkg")
-printc(255, 255, 255, 255, "cb run pkg")
-printc(255, 255, 255, 255, "cb stop pkg")
-printc(255, 255, 255, 255, "cb list")
-printc(255, 255, 255, 255, "cb | cb help")
 --]]
 
 --- this is the structure of how we package stuff in the repo (after decode)
@@ -92,20 +85,40 @@ end)
 
 ---
 printc(255, 224, 140, 255, "[Cheese Bread] Getting repo packages...")
+
+--- check if we have a local repo already
+local localrepo = io.open("Cheese Bread/repo.json")
 local repo_link_rest = "https://api.github.com/repos/uosq/cheese-bread-pkgs/contents/"
 
 ---@type RepoPkg[]?
 local repo_pkgs = {}
 
-local repo_response = http.Get(repo_link_rest)
+if localrepo then
+	printc(161, 255, 162, 255, "[Cheese Bread] Found a local repo already downloaded")
 
-if repo_response then
 	---@type RepoPkg[]?
-	repo_pkgs = json.decode(repo_response)
+	repo_pkgs = json.decode(localrepo:read("a"))
 
-	printc(255, 224, 140, 255, "[Cheese Bread] Success!")
+	localrepo:close()
 else
-	printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
+	local repo_response = http.Get(repo_link_rest)
+
+	if repo_response then
+		---@type RepoPkg[]?
+		repo_pkgs = json.decode(repo_response)
+
+		local file = io.open("Cheese Bread/repo.json", "w")
+
+		if file then
+			file:write(repo_response)
+			file:flush()
+			file:close()
+		end
+
+		printc(255, 224, 140, 255, "[Cheese Bread] Success!")
+	else
+		printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
+	end
 end
 ---
 
@@ -178,6 +191,7 @@ local function InstallPkg(pkg)
 						local script_raw = http.Get(pkg.url)
 						script:write(script_raw)
 						script:flush()
+						script:close()
 					end
 
 					printc(255, 219, 140, 255, string.format("Package %s finished installing!", pkg.name))
@@ -238,23 +252,28 @@ end
 local function StopPkg(pkg)
 	if running_packages[pkg.name] then
 		UnloadScript(running_packages[pkg.name])
+		running_packages[pkg.name] = nil
 	end
 end
 
 local function SyncRepo()
 	printc(140, 255, 251, 255, "[Cheese Bread] Fetching repo...")
-	local success = false
 	local repo_response = http.Get(repo_link_rest)
 
 	if repo_response then
 		---@type RepoPkg[]?
 		repo_pkgs = json.decode(repo_response)
-		success = true
-		printc(140, 255, 251, 255, "[Cheese Bread] Success!")
-	end
 
-	if not success then
-		printc(255, 0, 0, 255, "[Cheese Bread] Couldn't fetch the repo!")
+		local file = io.open("Cheese Bread/repo.json", "w")
+
+		if file then
+			file:write(repo_response)
+			file:close()
+		end
+
+		printc(255, 224, 140, 255, "[Cheese Bread] Success!")
+	else
+		printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
 	end
 end
 
@@ -309,13 +328,15 @@ end
 
 local function Help()
 	printc(161, 255, 186, 255, "Cheese Bread")
-	printc(148, 148, 148, 255, "------------")
-	printc(255, 255, 255, 255, "cb install pkg")
-	printc(255, 255, 255, 255, "cb remove pkg")
-	printc(255, 255, 255, 255, "cb run pkg")
-	printc(255, 255, 255, 255, "cb stop pkg")
-	printc(255, 255, 255, 255, "cb list repopkgs/localpkgs/runpkgs")
-	printc(255, 255, 255, 255, "cb / cb help (both are the same thing)")
+	printc(148, 148, 148, 255, "-------------------")
+	printc(255, 255, 255, 255, "Available commands:")
+	printc(255, 255, 255, 255, "--> cb install pkg")
+	printc(255, 255, 255, 255, "--> cb remove pkg")
+	printc(255, 255, 255, 255, "--> cb run pkg")
+	printc(255, 255, 255, 255, "--> cb stop pkg")
+	printc(255, 255, 255, 255, "--> cb list repopkgs/localpkgs/runpkgs")
+	printc(255, 255, 255, 255, "--> cb / cb help (both are the same thing)")
+	printc(255, 255, 255, 255, "--> cb sync")
 end
 
 ---@param str StringCmd
