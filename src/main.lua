@@ -276,7 +276,7 @@ local function InstallPkg(pkg)
 						219,
 						140,
 						255,
-						string.format("[Cheese Bread] Package '%s' finished intalling", pkg.name)
+						string.format("[Cheese Bread] Package '%s' finished installing", pkg.name)
 					)
 				end
 			end
@@ -294,6 +294,12 @@ local function RemovePkg(pkg)
 		file:close()
 
 		os.remove(path)
+
+		filesystem.EnumerateDirectory(SCRIPT_PATH .. pkg.name .. "/" .. "*.lua", function(filename, attributes)
+			local path = SCRIPT_PATH .. pkg.name .. "/" .. filename
+			os.remove(path)
+		end)
+
 		os.remove(SCRIPT_PATH .. pkg.name--[[ .. ".lua"]])
 
 		--- unload it in case its loaded
@@ -324,6 +330,11 @@ local function RunPkg(pkg)
 	local script = io.open(path)
 	if script then
 		running_packages[pkg.name] = path
+
+		for _, dep in pairs(pkg.deps) do
+			package.preload[dep.name] = dofile(SCRIPT_PATH .. pkg.name .. "/" .. dep.name .. ".lua")
+		end
+
 		LoadScript(path)
 		script:close()
 	else --- script not found
