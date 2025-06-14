@@ -18,6 +18,7 @@ printc(255, 255, 255, 255, "cb list")
 printc(255, 255, 255, 255, "cb | cb help")
 --]]
 
+--- this is the structure of how we package stuff in the repo (after decode)
 ---@class Package
 ---@field name string Name of the package
 ---@field description string Description of the package
@@ -28,6 +29,7 @@ printc(255, 255, 255, 255, "cb | cb help")
 ---@field encode fun(tab: table): string
 ---@field decode fun(str: string): table
 
+--- This is how github returns the each package in the repo
 ---@class RepoPkg
 ---@field name string
 ---@field path string
@@ -43,8 +45,20 @@ printc(255, 255, 255, 255, "cb | cb help")
 printc(120, 217, 255, 255, "Cheese bread is starting")
 printc(255, 171, 226, 255, "This may freeze your game for a few seconds")
 
----@type Package[]?
+---@type table<string, Package>
 local installed_packages = {}
+
+---@type table<string, string>
+local running_packages = {}
+
+local ROOT = "Cheese Bread/"
+local PACKAGE_PATH = ROOT .. "packages/"
+local SCRIPT_PATH = ROOT .. "scripts/"
+
+--- create dir if we didnt have it already
+filesystem.CreateDirectory("Cheese Bread")
+filesystem.CreateDirectory("Cheese Bread/packages")
+filesystem.CreateDirectory("Cheese Bread/scripts")
 
 local json_link = "https://raw.githubusercontent.com/rxi/json.lua/dbf4b2dd2eb7c23be2773c89eb059dadd6436f94/json.lua"
 
@@ -54,6 +68,27 @@ local json = load(http.Get(json_link))()
 if not json then
 	return
 end
+
+--[[
+structure of the directory
+
+Cheese Bread:
+	packages:
+		snowflake.json
+		paimbot.json
+		...
+--]]
+
+filesystem.EnumerateDirectory(PACKAGE_PATH .. "*.json", function(filename, attributes)
+	local name = filename:gsub(".json", "")
+	local path = string.format(PACKAGE_PATH .. "%s.json", name)
+	local file = io.open(path)
+	if file then
+		local contents = file:read("a")
+		installed_packages[name] = json.decode(contents)
+		file:close()
+	end
+end)
 
 ---
 printc(255, 224, 140, 255, "[Cheese Bread] Getting repo packages...")
@@ -67,26 +102,33 @@ local repo_response = http.Get(repo_link_rest)
 if repo_response then
 	---@type RepoPkg[]?
 	repo_pkgs = json.decode(repo_response)
+
+	printc(255, 224, 140, 255, "[Cheese Bread] Success!")
+else
+	printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
 end
 ---
 
+--- Returns the raw pkg from the local repo
 ---@param name string
 ---@return Package?
 local function GetPkgFromRepo(name)
 	if not repo_pkgs then
-		printc(255, 0, 0, 255, "The repo packages are empty!")
+		printc(255, 0, 0, 255, "[Cheese Bread] The repo packages are empty! WTF")
+		return
+	end
+
+	if not installed_packages then
+		printc(255, 0, 0, 255, "[Cheese Bread] installed_packages table is nil! WTF??")
 		return
 	end
 
 	local selected_pkg = nil
 
+	--- this probably wont scale well if we have hundreds or thousands of packages
 	for i = 1, #repo_pkgs do
 		local pkg = repo_pkgs[i]
-		if not pkg then
-			return
-		end
-
-		if pkg.name == name then
+		if pkg and pkg.name == (name .. ".json") then
 			---@type Package?
 			local pkg_content = json.decode(http.Get(pkg.download_url))
 
@@ -102,18 +144,168 @@ local function GetPkgFromRepo(name)
 end
 
 ---@param pkg Package
-local function InstallPkg(pkg) end
+local function InstallPkg(pkg)
+	if not installed_packages or not repo_pkgs then
+		return
+	end
+
+	if installed_packages[pkg.name] then
+		printc(255, 224, 140, 255, "[Cheese Bread] Package " .. pkg.name .. " is already installed!")
+		return
+	end
+
+	--- package is not installed
+	--- so we can install it know
+	for i = 1, #repo_pkgs do
+		local this = repo_pkgs[i]
+
+		if this and string.find(pkg.name, this.name:gsub(".json", "")) then
+			local path = string.format(PACKAGE_PATH .. "%s.json", this.name:gsub(".json", ""))
+
+			installed_packages[pkg.name] = pkg
+
+			local file = io.open(path, "w")
+
+			if file then
+				local pkg_encoded = json.encode(pkg)
+				if pkg_encoded then
+					file:write(pkg_encoded)
+					file:flush()
+					file:close()
+
+					local script = io.open(SCRIPT_PATH .. pkg.name .. ".lua", "w")
+					if script then
+						local script_raw = http.Get(pkg.url)
+						script:write(script_raw)
+						script:flush()
+					end
+
+					printc(255, 219, 140, 255, string.format("Package %s finished installing!", pkg.name))
+				end
+			end
+
+			break
+		end
+	end
+end
 
 ---@param pkg Package
-local function RemovePkg(pkg) end
+local function RemovePkg(pkg)
+	local path = PACKAGE_PATH .. pkg.name .. ".json"
+	local file = io.open(path)
+	if file then
+		file:close()
+
+		os.remove(path)
+		os.remove(SCRIPT_PATH .. pkg.name .. ".lua")
+
+		--- unload it in case its loaded
+		if running_packages[pkg.name] then
+			--- cant assume its SCRIPT_PATH .. pkg.name .. ".lua" as it could be in the temp dir!
+			UnloadScript(running_packages[pkg.name])
+		end
+
+		installed_packages[pkg.name] = nil
+		printc(140, 255, 167, 255, "[Cheese Bread] Package " .. pkg.name .. " was removed")
+	else
+		installed_packages[pkg.name] = nil --- just in case its still in memory
+		printc(255, 0, 0, 255, "[Cheese Bread] Package " .. pkg.name .. " not found or already removed")
+	end
+end
 
 ---@param pkg Package
-local function RunPkg(pkg) end
+local function RunPkg(pkg)
+	if not installed_packages then
+		return
+	end
+
+	if running_packages[pkg.name] then
+		return
+	end
+
+	local path = SCRIPT_PATH .. pkg.name .. ".lua"
+	local script = io.open(path)
+	if script then
+		running_packages[pkg.name] = path
+		LoadScript(path)
+		script:close()
+	else --- script not found
+		printc(255, 0, 0, 255, "Package " .. pkg.name .. " not found! Try reinstalling it")
+	end
+end
 
 ---@param pkg Package
-local function StopPkg(pkg) end
+local function StopPkg(pkg)
+	if running_packages[pkg.name] then
+		UnloadScript(running_packages[pkg.name])
+	end
+end
 
-local function ListInstalledPkgs() end
+local function SyncRepo()
+	printc(140, 255, 251, 255, "[Cheese Bread] Fetching repo...")
+	local success = false
+	local repo_response = http.Get(repo_link_rest)
+
+	if repo_response then
+		---@type RepoPkg[]?
+		repo_pkgs = json.decode(repo_response)
+		success = true
+		printc(140, 255, 251, 255, "[Cheese Bread] Success!")
+	end
+
+	if not success then
+		printc(255, 0, 0, 255, "[Cheese Bread] Couldn't fetch the repo!")
+	end
+end
+
+local function ListInstalledPkgs()
+	if not installed_packages then
+		return
+	end
+
+	local text = "--> %s | %s"
+
+	printc(190, 140, 255, 255, "Installed packages:")
+
+	for _, pkg in pairs(installed_packages) do
+		printc(175, 255, 140, 255, string.format(text, pkg.name, pkg.description))
+	end
+end
+
+local function ListRepoPkgs()
+	if not repo_pkgs then
+		error()
+	end
+
+	if not installed_packages then
+		return
+	end
+
+	printc(190, 140, 255, 255, "Available packages:")
+
+	for i = 1, #repo_pkgs do
+		local pkg = repo_pkgs[i]
+		if pkg then
+			local name = string.gsub(pkg.name, ".json", "")
+			local installed = false
+
+			local file = io.open(PACKAGE_PATH .. pkg.name, "r")
+			if file then
+				installed = true
+				file:close()
+			end
+
+			printc(255, 255, 255, 255, "--> " .. name .. (installed and " (installed)" or ""))
+		end
+	end
+end
+
+local function ListRunningPkgs()
+	printc(190, 140, 255, 255, "Currently running packages:")
+	for name in pairs(running_packages) do
+		printc(255, 255, 255, 255, "--> " .. name)
+	end
+end
 
 local function Help()
 	printc(161, 255, 186, 255, "Cheese Bread")
@@ -122,9 +314,8 @@ local function Help()
 	printc(255, 255, 255, 255, "cb remove pkg")
 	printc(255, 255, 255, 255, "cb run pkg")
 	printc(255, 255, 255, 255, "cb stop pkg")
-	printc(255, 255, 255, 255, "cb list")
-	printc(255, 255, 255, 255, "cb")
-	printc(255, 255, 255, 255, "cb help")
+	printc(255, 255, 255, 255, "cb list repopkgs/localpkgs/runpkgs")
+	printc(255, 255, 255, 255, "cb / cb help (both are the same thing)")
 end
 
 ---@param str StringCmd
@@ -150,22 +341,35 @@ local function RunShell(str)
 	if words[2] == nil or words[2] == "" or words[2] == "help" then
 		Help()
 	elseif words[2] == "list" then
-		ListInstalledPkgs()
-	else
-		local pkg = GetPkgFromRepo(words[3])
-		if not pkg then
-			printc(255, 0, 0, 255, string.format("The package %s was not found!", words[3]))
+		if words[3] == "repopkgs" then
+			ListRepoPkgs()
+		elseif words[3] == "localpkgs" then
+			ListInstalledPkgs()
+		elseif words[3] == "runpkgs" then
+			ListRunningPkgs()
+		else
+			printc(255, 0, 0, 255, "[Cheese Bread] Wrong list! Options: repopkgs, localpkgs or runpkgs")
 			return
 		end
+	else
+		if words[2] == "sync" then
+			SyncRepo()
+		else
+			local pkg = GetPkgFromRepo(words[3])
+			if not pkg then
+				printc(255, 0, 0, 255, string.format("[Cheese Bread] The package %s was not found!", words[3]))
+				return
+			end
 
-		if words[2] == "install" then
-			InstallPkg(pkg)
-		elseif words[2] == "remove" then
-			RemovePkg(pkg)
-		elseif words[2] == "run" then
-			RunPkg(pkg)
-		elseif words[2] == "stop" then
-			StopPkg(pkg)
+			if words[2] == "install" then
+				InstallPkg(pkg)
+			elseif words[2] == "remove" then
+				RemovePkg(pkg)
+			elseif words[2] == "run" then
+				RunPkg(pkg)
+			elseif words[2] == "stop" then
+				StopPkg(pkg)
+			end
 		end
 	end
 end
@@ -174,6 +378,9 @@ local function Unload()
 	json = nil
 	installed_packages = nil
 	repo_pkgs = nil
+
+	collectgarbage("collect")
 end
 
 callbacks.Register("SendStringCmd", "Cheese Bread Shell", RunShell)
+callbacks.Register("Unload", Unload)
