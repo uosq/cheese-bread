@@ -47,11 +47,13 @@ local running_packages = {}
 local ROOT = "Cheese Bread/"
 local PACKAGE_PATH = ROOT .. "packages/"
 local SCRIPT_PATH = ROOT .. "scripts/"
+local REPOS_PATH = ROOT .. "repos/"
 
 --- create dir if we didnt have it already
 filesystem.CreateDirectory("Cheese Bread")
 filesystem.CreateDirectory("Cheese Bread/packages")
 filesystem.CreateDirectory("Cheese Bread/scripts")
+filesystem.CreateDirectory("Cheese Bread/repos")
 
 local json_link = "https://raw.githubusercontent.com/rxi/json.lua/dbf4b2dd2eb7c23be2773c89eb059dadd6436f94/json.lua"
 
@@ -86,12 +88,13 @@ end)
 ---
 printc(255, 224, 140, 255, "[Cheese Bread] Getting repo packages...")
 
---- check if we have a local repo already
-local localrepo = io.open("Cheese Bread/repo.json")
 local repo_link_rest = "https://api.github.com/repos/uosq/cheese-bread-pkgs/contents/"
 
 ---@type RepoPkg[]?
 local repo_pkgs = {}
+
+--- check if we have a local repo already
+--[[local localrepo = io.open("Cheese Bread/repo.json")
 
 if localrepo then
 	printc(161, 255, 162, 255, "[Cheese Bread] Found a local repo already downloaded")
@@ -119,7 +122,54 @@ else
 	else
 		printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
 	end
+end]]
+
+local repo_count = 0
+
+filesystem.EnumerateDirectory(REPOS_PATH .. "*.json", function(filename, attributes)
+	repo_count = repo_count + 1
+
+	local path = REPOS_PATH .. filename
+
+	local file = io.open(path)
+
+	if file then
+		local contents = json.decode(file:read("a"))
+
+		local name = filename:gsub(".json", "")
+
+		printc(255, 255, 0, 255, "[Cheese Bread] Loading " .. name .. " repo")
+
+		for _, v in ipairs(contents) do
+			---@diagnostic disable-next-line: param-type-mismatch
+			table.insert(repo_pkgs, v)
+		end
+
+		file:close()
+	end
+end)
+
+if repo_count == 0 then
+	local repo_response = http.Get(repo_link_rest)
+
+	if repo_response then
+		---@type RepoPkg[]?
+		repo_pkgs = json.decode(repo_response)
+
+		local file = io.open("Cheese Bread/repos/standard.json", "w")
+
+		if file then
+			file:write(repo_response)
+			file:flush()
+			file:close()
+		end
+
+		printc(255, 224, 140, 255, "[Cheese Bread] Success!")
+	else
+		printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
+	end
 end
+
 ---
 
 --- Returns the raw pkg from the local repo
@@ -163,7 +213,7 @@ local function InstallPkg(pkg)
 	end
 
 	if installed_packages[pkg.name] then
-		printc(255, 224, 140, 255, "[Cheese Bread] Package " .. pkg.name .. " is already installed!")
+		printc(255, 224, 140, 255, "[Cheese Bread] Package '" .. pkg.name .. "' is already installed!")
 		return
 	end
 
@@ -172,7 +222,11 @@ local function InstallPkg(pkg)
 	for i = 1, #repo_pkgs do
 		local this = repo_pkgs[i]
 
-		if this and string.find(pkg.name, this.name:gsub(".json", "")) then
+		local name = this.name:gsub(".json", "")
+
+		if
+			this and pkg.name == name --[[string.find(pkg.name, this.name:gsub(".json", ""))]]
+		then
 			local path = string.format(PACKAGE_PATH .. "%s.json", this.name:gsub(".json", ""))
 
 			installed_packages[pkg.name] = pkg
@@ -194,7 +248,13 @@ local function InstallPkg(pkg)
 						script:close()
 					end
 
-					printc(255, 219, 140, 255, string.format("Package %s finished installing!", pkg.name))
+					printc(
+						255,
+						219,
+						140,
+						255,
+						string.format("[Cheese Bread] Package '%s' finished intalling", pkg.name)
+					)
 				end
 			end
 
@@ -220,10 +280,10 @@ local function RemovePkg(pkg)
 		end
 
 		installed_packages[pkg.name] = nil
-		printc(140, 255, 167, 255, "[Cheese Bread] Package " .. pkg.name .. " was removed")
+		printc(140, 255, 167, 255, "[Cheese Bread] Package '" .. pkg.name .. "' was removed")
 	else
 		installed_packages[pkg.name] = nil --- just in case its still in memory
-		printc(255, 0, 0, 255, "[Cheese Bread] Package " .. pkg.name .. " not found or already removed")
+		printc(255, 0, 0, 255, "[Cheese Bread] Package '" .. pkg.name .. "' not found or already removed")
 	end
 end
 
@@ -244,7 +304,7 @@ local function RunPkg(pkg)
 		LoadScript(path)
 		script:close()
 	else --- script not found
-		printc(255, 0, 0, 255, "Package " .. pkg.name .. " not found! Try reinstalling it")
+		printc(255, 0, 0, 255, "Package '" .. pkg.name .. "' not found! Try reinstalling it")
 	end
 end
 
@@ -258,23 +318,27 @@ end
 
 local function SyncRepo()
 	printc(140, 255, 251, 255, "[Cheese Bread] Fetching repo...")
-	local repo_response = http.Get(repo_link_rest)
+	repo_pkgs = {}
 
-	if repo_response then
-		---@type RepoPkg[]?
-		repo_pkgs = json.decode(repo_response)
+	filesystem.EnumerateDirectory(REPOS_PATH .. "*.json", function(filename, attributes)
+		local path = REPOS_PATH .. filename
 
-		local file = io.open("Cheese Bread/repo.json", "w")
+		local file = io.open(path)
 
 		if file then
-			file:write(repo_response)
+			local contents = json.decode(file:read("a"))
+
+			local name = filename:gsub(".json", "")
+
+			printc(255, 255, 0, 255, "[Cheese Bread] Loading '" .. name .. "' repo")
+
+			for _, v in ipairs(contents) do
+				repo_pkgs[#repo_pkgs + 1] = v
+			end
+
 			file:close()
 		end
-
-		printc(255, 224, 140, 255, "[Cheese Bread] Success!")
-	else
-		printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
-	end
+	end)
 end
 
 local function ListInstalledPkgs()
@@ -376,9 +440,9 @@ local function RunShell(str)
 		if words[2] == "sync" then
 			SyncRepo()
 		else
-			local pkg = GetPkgFromRepo(words[3])
+			local pkg = GetPkgFromRepo(table.concat(words, " ", 3))
 			if not pkg then
-				printc(255, 0, 0, 255, string.format("[Cheese Bread] The package %s was not found!", words[3]))
+				printc(255, 0, 0, 255, string.format("[Cheese Bread] The package '%s' was not found!", words[3]))
 				return
 			end
 
@@ -397,6 +461,7 @@ end
 
 local function Unload()
 	json = nil
+	---@diagnostic disable-next-line: cast-local-type
 	installed_packages = nil
 	repo_pkgs = nil
 
