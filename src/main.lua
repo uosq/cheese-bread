@@ -16,7 +16,7 @@ cb | cb help
 ---@field name string Name of the package
 ---@field description string Description of the package
 ---@field url string Url of the package's file
----@field continuous boolean If the package has callbacks
+---@field credits string? All of the package's creators
 
 ---@class JSON
 ---@field encode fun(tab: table): string
@@ -92,38 +92,7 @@ local repo_link_rest = "https://api.github.com/repos/uosq/cheese-bread-pkgs/cont
 
 ---@type RepoPkg[]?
 local repo_pkgs = {}
-
---- check if we have a local repo already
---[[local localrepo = io.open("Cheese Bread/repo.json")
-
-if localrepo then
-	printc(161, 255, 162, 255, "[Cheese Bread] Found a local repo already downloaded")
-
-	---@type RepoPkg[]?
-	repo_pkgs = json.decode(localrepo:read("a"))
-
-	localrepo:close()
-else
-	local repo_response = http.Get(repo_link_rest)
-
-	if repo_response then
-		---@type RepoPkg[]?
-		repo_pkgs = json.decode(repo_response)
-
-		local file = io.open("Cheese Bread/repo.json", "w")
-
-		if file then
-			file:write(repo_response)
-			file:flush()
-			file:close()
-		end
-
-		printc(255, 224, 140, 255, "[Cheese Bread] Success!")
-	else
-		printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
-	end
-end]]
-
+local finished_fetching = false
 local repo_count = 0
 
 filesystem.EnumerateDirectory(REPOS_PATH .. "*.json", function(filename, attributes)
@@ -138,7 +107,7 @@ filesystem.EnumerateDirectory(REPOS_PATH .. "*.json", function(filename, attribu
 
 		local name = filename:gsub(".json", "")
 
-		printc(255, 255, 0, 255, "[Cheese Bread] Loading " .. name .. " repo")
+		printc(255, 255, 0, 255, "[Cheese Bread] Loading '" .. name .. "' repo")
 
 		for _, v in ipairs(contents) do
 			---@diagnostic disable-next-line: param-type-mismatch
@@ -148,6 +117,10 @@ filesystem.EnumerateDirectory(REPOS_PATH .. "*.json", function(filename, attribu
 		file:close()
 	end
 end)
+
+if repo_count > 0 then
+	finished_fetching = true
+end
 
 if repo_count == 0 then
 	local repo_response = http.Get(repo_link_rest)
@@ -165,9 +138,14 @@ if repo_count == 0 then
 		end
 
 		printc(255, 224, 140, 255, "[Cheese Bread] Success!")
+		finished_fetching = true
 	else
 		printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
 	end
+end
+
+if finished_fetching then
+	printc(100, 255, 100, 255, "[Cheese Bread] Finished loading", "Use command 'cb'")
 end
 
 ---
@@ -339,6 +317,19 @@ local function SyncRepo()
 			file:close()
 		end
 	end)
+
+	filesystem.EnumerateDirectory(SCRIPT_PATH .. "*.lua", function(filename, attributes)
+		local pkg = GetPkgFromRepo(filename:gsub(".json", ""))
+
+		if pkg then
+			local file = io.open(SCRIPT_PATH .. pkg.name, "w")
+			if file then
+				file:write(http.Get(pkg.url))
+				file:flush()
+				file:close()
+			end
+		end
+	end)
 end
 
 local function ListInstalledPkgs()
@@ -351,7 +342,14 @@ local function ListInstalledPkgs()
 	printc(190, 140, 255, 255, "Installed packages:")
 
 	for _, pkg in pairs(installed_packages) do
-		printc(175, 255, 140, 255, string.format(text, pkg.name, pkg.description))
+		printc(
+			175,
+			255,
+			140,
+			255,
+			string.format(text, pkg.name, pkg.description),
+			"   credits: " .. (pkg.credits or "?")
+		)
 	end
 end
 
@@ -401,6 +399,14 @@ local function Help()
 	printc(255, 255, 255, 255, "--> cb list repopkgs/localpkgs/runpkgs")
 	printc(255, 255, 255, 255, "--> cb / cb help (both are the same thing)")
 	printc(255, 255, 255, 255, "--> cb sync")
+	printc(148, 148, 148, 255, "-------------------")
+	printc(
+		161,
+		255,
+		186,
+		255,
+		"'cb sync' updates the packages and the local repo(s), so use it when a script has updated"
+	)
 end
 
 ---@param str StringCmd
