@@ -17,6 +17,7 @@ cb | cb help
 ---@field description string Description of the package
 ---@field url string Url of the package's file
 ---@field credits string? All of the package's creators
+---@field deps {name: string, url: string}[] Array with dependencies (urls)
 
 ---@class JSON
 ---@field encode fun(tab: table): string
@@ -246,12 +247,28 @@ local function InstallPkg(pkg)
 					file:flush()
 					file:close()
 
-					local script = io.open(SCRIPT_PATH .. pkg.name .. ".lua", "w")
+					filesystem.CreateDirectory(SCRIPT_PATH .. pkg.name)
+
+					local formattedtext = string.format("%s/%s/%s.lua", SCRIPT_PATH, pkg.name, pkg.name)
+					local script = io.open(formattedtext, "w")
 					if script then
 						local script_raw = http.Get(pkg.url)
 						script:write(script_raw)
 						script:flush()
 						script:close()
+					end
+
+					--- install dependencies
+					if pkg.deps and #pkg.deps > 0 then
+						for _, dep in ipairs(pkg.deps) do
+							local path = string.format("%s/%s/%s.lua", SCRIPT_PATH, pkg.name, dep.name)
+							local file = io.open(path, "w")
+							if file then
+								file:write(http.Get(dep.url))
+								file:flush()
+								file:close()
+							end
+						end
 					end
 
 					printc(
@@ -277,11 +294,11 @@ local function RemovePkg(pkg)
 		file:close()
 
 		os.remove(path)
-		os.remove(SCRIPT_PATH .. pkg.name .. ".lua")
+		os.remove(SCRIPT_PATH .. pkg.name--[[ .. ".lua"]])
 
 		--- unload it in case its loaded
 		if running_packages[pkg.name] then
-			--- cant assume its SCRIPT_PATH .. pkg.name .. ".lua" as it could be in the temp dir!
+			--- cant assume its SCRIPT_PATH .. pkg.name .. ".lua" as it could be in another folder!
 			UnloadScript(running_packages[pkg.name])
 		end
 
@@ -303,7 +320,7 @@ local function RunPkg(pkg)
 		return
 	end
 
-	local path = SCRIPT_PATH .. pkg.name .. ".lua"
+	local path = SCRIPT_PATH .. pkg.name .. "/" .. pkg.name .. ".lua"
 	local script = io.open(path)
 	if script then
 		running_packages[pkg.name] = path
@@ -480,6 +497,13 @@ local function Unload()
 	---@diagnostic disable-next-line: cast-local-type
 	installed_packages = nil
 	repo_pkgs = nil
+
+	for i, pkg in ipairs(running_packages) do
+		UnloadScript(pkg)
+	end
+
+	---@diagnostic disable-next-line: cast-local-type
+	running_packages = nil
 
 	collectgarbage("collect")
 end
