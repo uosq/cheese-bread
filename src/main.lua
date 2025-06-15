@@ -16,7 +16,7 @@ cb | cb help
 ---@field name string Name of the package
 ---@field description string Description of the package
 ---@field url string Url of the package's file
----@field credits string? All of the package's creators
+---@field authors string? All of the package's creators
 ---@field deps {name: string, url: string}[] Array with dependencies (urls)
 
 ---@class JSON
@@ -65,6 +65,36 @@ filesystem.CreateDirectory("Cheese Bread/packages")
 filesystem.CreateDirectory("Cheese Bread/scripts")
 filesystem.CreateDirectory("Cheese Bread/repos")
 
+--- these names are hilarious lol
+
+---@param r integer
+---@param g integer
+---@param b integer
+local function CheeseGeneric(r, g, b, ...)
+	local msgs = { ... }
+
+	for _, msg in ipairs(msgs) do
+		local output = string.format("[Cheese Bread]: %s", tostring(msg))
+		printc(r, g, b, 255, output)
+	end
+end
+
+local function CheeseWarn(...)
+	CheeseGeneric(255, 255, 0, ...)
+end
+
+local function CheeseError(...)
+	CheeseGeneric(255, 0, 0, ...)
+end
+
+local function CheesePrint(...)
+	CheeseGeneric(255, 255, 255, ...)
+end
+
+local function CheeseSuccess(...)
+	CheeseGeneric(122, 240, 255, ...)
+end
+
 filesystem.EnumerateDirectory(PACKAGE_PATH .. "*.json", function(filename, attributes)
 	local name = filename:gsub(".json", "")
 	local path = string.format(PACKAGE_PATH .. "%s.json", name)
@@ -77,7 +107,8 @@ filesystem.EnumerateDirectory(PACKAGE_PATH .. "*.json", function(filename, attri
 end)
 
 ---
-printc(255, 224, 140, 255, "[Cheese Bread] Getting repo packages...")
+--printc(255, 224, 140, 255, "[Cheese Bread] Getting repo packages...")
+CheesePrint("Getting repo packages")
 
 local repo_link_rest = "https://api.github.com/repos/uosq/cheese-bread-pkgs/contents/packages"
 
@@ -100,33 +131,31 @@ local function EnumerateRepoDir()
 
 			local repo_name = filename:gsub(".json", "")
 
-			printc(255, 255, 0, 255, "[Cheese Bread] Loading '" .. repo_name .. "' repo")
+			--printc(255, 255, 0, 255, "[Cheese Bread] Loading '" .. repo_name .. "' repo")
+			CheeseWarn(string.format("Loading repository '%s'", repo_name))
 
-			for _, v in ipairs(decoded) do
+			for _, pkg in ipairs(decoded) do
 				-- Sanity check for JSON file name matching the inner name
-				local file_name_no_ext = v.name:gsub("%.json$", "")
+				local file_name_no_ext = pkg.name:gsub("%.json$", "")
 
-				local pkg_content_raw = http.Get(v.download_url)
+				local pkg_content_raw = http.Get(pkg.download_url)
 				if pkg_content_raw then
 					local pkg_content = json.decode(pkg_content_raw)
 
 					if pkg_content and pkg_content.name ~= file_name_no_ext then
-						printc(
-							255,
-							0,
-							0,
-							255,
+						CheeseError(
 							string.format(
-								"[Cheese Bread] Name mismatch: file '%s' has 'name' field '%s'. Skipping this package",
-								v.name,
+								"Name mismatch: file '%s' has 'name' field '%s'. Skipping this package",
+								pkg.name,
 								pkg_content and pkg_content.name or "?"
 							)
 						)
 					else
-						repo_pkgs[#repo_pkgs + 1] = v
+						repo_pkgs[#repo_pkgs + 1] = pkg
 					end
 				else
-					printc(255, 128, 0, 255, string.format("[Cheese Bread] Failed to download package '%s'", v.name))
+					--printc(255, 128, 0, 255, string.format("[Cheese Bread] Failed to download package '%s'", v.name))
+					CheeseError("Failed to download package '%s'", pkg.name)
 				end
 			end
 
@@ -156,15 +185,18 @@ if repo_count == 0 then
 			file:close()
 		end
 
-		printc(255, 224, 140, 255, "[Cheese Bread] Success!")
+		--printc(255, 224, 140, 255, "[Cheese Bread] Success!")
+		CheeseSuccess("Success!")
 		finished_fetching = true
 	else
 		printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
+		CheeseError("Error while fetching 'standard' repo!")
 	end
 end
 
 if finished_fetching then
-	printc(100, 255, 100, 255, "[Cheese Bread] Finished loading", "Use command 'cb'")
+	--printc(100, 255, 100, 255, "[Cheese Bread] Finished loading", "Use command 'cb'")
+	CheeseSuccess("Finished loading", "Use command 'cb' or 'cb help' to start")
 end
 
 ---
@@ -174,12 +206,14 @@ end
 ---@return Package?
 local function GetPkgFromRepo(name)
 	if not repo_pkgs then
-		printc(255, 0, 0, 255, "[Cheese Bread] The repo packages are empty! WTF")
+		--printc(255, 0, 0, 255, "[Cheese Bread] The repo packages are empty! WTF")
+		CheeseError("The repo packages are empty! WTF??")
 		return
 	end
 
 	if not installed_packages then
-		printc(255, 0, 0, 255, "[Cheese Bread] installed_packages table is nil! WTF??")
+		--printc(255, 0, 0, 255, "[Cheese Bread] installed_packages table is nil! WTF??")
+		CheeseError("installed_packages table is nil! WTF??????!?!?!")
 		return
 	end
 
@@ -210,7 +244,8 @@ local function InstallPkg(pkg)
 	end
 
 	if installed_packages[pkg.name] then
-		printc(255, 224, 140, 255, "[Cheese Bread] Package '" .. pkg.name .. "' is already installed!")
+		--printc(255, 224, 140, 255, "[Cheese Bread] Package '" .. pkg.name .. "' is already installed!")
+		CheeseWarn(string.format("The package '%s' is already installed!", pkg.name))
 		return
 	end
 
@@ -262,13 +297,7 @@ local function InstallPkg(pkg)
 						end
 					end
 
-					printc(
-						255,
-						219,
-						140,
-						255,
-						string.format("[Cheese Bread] Package '%s' finished installing", pkg.name)
-					)
+					CheeseSuccess(string.format("The package '%s' has finished installing", pkg.name))
 				end
 			end
 
@@ -300,10 +329,12 @@ local function RemovePkg(pkg)
 		end
 
 		installed_packages[pkg.name] = nil
-		printc(140, 255, 167, 255, "[Cheese Bread] Package '" .. pkg.name .. "' was removed")
+		--printc(140, 255, 167, 255, "[Cheese Bread] Package '" .. pkg.name .. "' was removed")
+		CheeseSuccess(string.format("Package '%s' removed", pkg.name))
 	else
 		installed_packages[pkg.name] = nil --- just in case its still in memory
-		printc(255, 0, 0, 255, "[Cheese Bread] Package '" .. pkg.name .. "' not found or already removed")
+		--printc(255, 0, 0, 255, "[Cheese Bread] Package '" .. pkg.name .. "' not found or already removed")
+		CheeseWarn(string.format("Package '%s' not found or already removed", pkg.name))
 	end
 end
 
@@ -314,18 +345,22 @@ local function RunPkg(pkg)
 	end
 
 	if running_packages[pkg.name] then
+		--printc(255, 100, 100, 255, string.format("[Cheese Bread] The package '%s' is already running!", pkg.name))
+		CheeseWarn(string.format("The package '%s' is already running!"))
 		return
 	end
 
 	local path = SCRIPT_PATH .. pkg.name .. "/" .. pkg.name .. ".lua"
 	local script = io.open(path)
 	if script then
-		running_packages[pkg.name] = path
-
-		LoadScript(path)
+		--running_packages[pkg.name] = path
+		--LoadScript(path)
 		script:close()
+		--printc(100, 255, 100, 255, string.format("The package '%s' started", pkg.name))
+		CheeseSuccess(string.format("The package '%s' started", pkg.name))
 	else --- script not found
-		printc(255, 0, 0, 255, "Package '" .. pkg.name .. "' not found! Try reinstalling it")
+		--printc(255, 0, 0, 255, "Package '" .. pkg.name .. "' not found! Try reinstalling it")
+		CheeseWarn(string.format("Package '%s' not found! Try reinstalling it"))
 	end
 end
 
@@ -334,11 +369,17 @@ local function StopPkg(pkg)
 	if running_packages[pkg.name] then
 		UnloadScript(running_packages[pkg.name])
 		running_packages[pkg.name] = nil
+	else
+		--printc(255, 0, 0, 255, string.format("[Cheese Bread] The package '%s' is not running", pkg.name))
+		CheeseWarn(string.format("The package '%s' is already stopped", pkg.name))
 	end
 end
 
 local function SyncRepo()
-	printc(140, 255, 251, 255, "[Cheese Bread] Fetching repo...")
+	--printc(140, 255, 251, 255, "[Cheese Bread] Fetching repo...")
+	local repo_response = http.Get(repo_link_rest)
+
+	CheesePrint("Fetching repo")
 	repo_pkgs = {}
 
 	EnumerateRepoDir()
@@ -356,8 +397,6 @@ local function SyncRepo()
 		end
 	end)
 
-	local repo_response = http.Get(repo_link_rest)
-
 	if repo_response then
 		---@type RepoPkg[]?
 		repo_pkgs = json.decode(repo_response)
@@ -368,6 +407,7 @@ local function SyncRepo()
 			file:write(repo_response)
 			file:flush()
 			file:close()
+			CheeseSuccess("Repo fetched successfully")
 		end
 	end
 end
@@ -379,7 +419,8 @@ local function ListInstalledPkgs()
 
 	local text = "--> %s | %s"
 
-	printc(190, 140, 255, 255, "Installed packages:")
+	--printc(190, 140, 255, 255, "Installed packages:")
+	CheeseGeneric(190, 140, 255, "Installed packages:")
 
 	for _, pkg in pairs(installed_packages) do
 		printc(
@@ -388,43 +429,45 @@ local function ListInstalledPkgs()
 			140,
 			255,
 			string.format(text, pkg.name, pkg.description),
-			"   credits: " .. (pkg.credits or "?")
+			"   author(s): " .. (pkg.authors or "?")
 		)
 	end
 end
 
 local function ListRepoPkgs()
 	if not repo_pkgs then
-		error()
-	end
-
-	if not installed_packages then
+		--error()
+		CheeseError("repo_pkgs is nil! wtf??")
 		return
 	end
 
-	printc(190, 140, 255, 255, "Available packages:")
+	if not installed_packages then
+		CheeseError("installed_packages is nil! WTF???")
+		return
+	end
 
-	for i = 1, #repo_pkgs do
-		local pkg = repo_pkgs[i]
-		if pkg then
-			local name = string.gsub(pkg.name, ".json", "")
-			local installed = false
+	CheeseGeneric(190, 140, 255, "Available packages:")
 
-			local file = io.open(PACKAGE_PATH .. pkg.name, "r")
-			if file then
-				installed = true
-				file:close()
-			end
+	for _, pkg in ipairs(repo_pkgs) do
+		local name = string.gsub(pkg.name, ".json", "")
+		local installed = false
 
-			printc(255, 255, 255, 255, "--> " .. name .. (installed and " (installed)" or ""))
+		local file = io.open(PACKAGE_PATH .. pkg.name, "r")
+		if file then
+			installed = true
+			file:close()
 		end
+
+		printc(255, 255, 255, 255, string.format("--> %s %s", name, (installed and "(installed)" or "")))
 	end
 end
 
 local function ListRunningPkgs()
-	printc(190, 140, 255, 255, "Currently running packages:")
+	--printc(190, 140, 255, 255, "Currently running packages:")
+	CheeseGeneric(190, 140, 255, "Currently running packages:")
 	for name in pairs(running_packages) do
-		printc(255, 255, 255, 255, "--> " .. name)
+		--printc(255, 255, 255, 255, "--> " .. name)
+		printc(255, 255, 255, 255, string.format("--> %s", name))
 	end
 end
 
@@ -432,20 +475,20 @@ local function Help()
 	printc(161, 255, 186, 255, "Cheese Bread")
 	printc(148, 148, 148, 255, "-------------------")
 	printc(255, 255, 255, 255, "Available commands:")
-	printc(255, 255, 255, 255, "--> cb install pkg")
-	printc(255, 255, 255, 255, "--> cb remove pkg")
-	printc(255, 255, 255, 255, "--> cb run pkg")
-	printc(255, 255, 255, 255, "--> cb stop pkg")
-	printc(255, 255, 255, 255, "--> cb list repopkgs/localpkgs/runpkgs")
-	printc(255, 255, 255, 255, "--> cb / cb help (both are the same thing)")
-	printc(255, 255, 255, 255, "--> cb sync")
+	printc(255, 255, 255, 255, "--> cheese install pkg")
+	printc(255, 255, 255, 255, "--> cheese remove pkg")
+	printc(255, 255, 255, 255, "--> cheese run pkg")
+	printc(255, 255, 255, 255, "--> cheese stop pkg")
+	printc(255, 255, 255, 255, "--> cheese list repopkgs/localpkgs/runpkgs")
+	printc(255, 255, 255, 255, "--> cheese / cb help (both are the same thing)")
+	printc(255, 255, 255, 255, "--> cheese sync")
 	printc(148, 148, 148, 255, "-------------------")
 	printc(
 		161,
 		255,
 		186,
 		255,
-		"'cb sync' updates the packages and the local repo(s), so use it when a script has updated"
+		"'cheese sync' updates the packages and the local repo(s), so use it when a script has updated"
 	)
 end
 
@@ -461,7 +504,7 @@ local function RunShell(str)
 	end
 
 	--- check if first word is ours
-	if not (words[1] == "cb") then
+	if not (words[1] == "cheese") then
 		return
 	end
 
@@ -479,7 +522,8 @@ local function RunShell(str)
 		elseif words[3] == "runpkgs" then
 			ListRunningPkgs()
 		else
-			printc(255, 0, 0, 255, "[Cheese Bread] Wrong list! Options: repopkgs, localpkgs or runpkgs")
+			--printc(255, 0, 0, 255, "[Cheese Bread] Wrong list! Options: repopkgs, localpkgs or runpkgs")
+			CheeseError("Wrong list! Options available: repopkgs, localpkgs or runpkgs")
 			return
 		end
 	else
@@ -488,7 +532,8 @@ local function RunShell(str)
 		else
 			local pkg = GetPkgFromRepo(table.concat(words, " ", 3))
 			if not pkg then
-				printc(255, 0, 0, 255, string.format("[Cheese Bread] The package '%s' was not found!", words[3]))
+				--printc(255, 0, 0, 255, string.format("[Cheese Bread] The package '%s' was not found!", words[3]))
+				CheeseError(string.format("The package '%s' was not found!"))
 				return
 			end
 
@@ -517,6 +562,8 @@ local function Unload()
 
 	---@diagnostic disable-next-line: cast-local-type
 	running_packages = nil
+
+	CheeseSuccess("Cheese Bread unloaded successfully")
 
 	collectgarbage("collect")
 end
