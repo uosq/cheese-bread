@@ -65,6 +65,33 @@ if not json then
 	return
 end
 
+--- is this behavior that might bite me in the ass later? yes, absolutely
+local custom_require_unformatted = [[
+local function require(name)
+    local file = io.open("Cheese Bread/scripts/" .. "%s" .. "/".. tostring(name) ..".lua")
+
+    if file then
+        local chunk = load(file:read("a"))
+        if chunk then
+            local success, result = pcall(chunk)
+            if not success then
+                printc(255, 0, 0, 255, "error :" .. tostring(result))
+                return nil
+            end
+
+            return result
+        end
+        file:close()
+    end
+
+	return nil
+end
+]]
+
+local function FormatRequire(directory, filename)
+	return string.format(custom_require_unformatted, directory)
+end
+
 --[[
 structure of the directory
 
@@ -253,6 +280,10 @@ local function InstallPkg(pkg)
 					local script = io.open(formattedtext, "w")
 					if script then
 						local script_raw = http.Get(pkg.url)
+
+						local formatted = FormatRequire(pkg.name, pkg.name)
+						script:write(formatted)
+
 						script:write(script_raw)
 						script:flush()
 						script:close()
@@ -264,6 +295,7 @@ local function InstallPkg(pkg)
 							local path = string.format("%s/%s/%s.lua", SCRIPT_PATH, pkg.name, dep.name)
 							local file = io.open(path, "w")
 							if file then
+								file:write(FormatRequire(pkg.name, dep.name))
 								file:write(http.Get(dep.url))
 								file:flush()
 								file:close()
@@ -331,10 +363,6 @@ local function RunPkg(pkg)
 	if script then
 		running_packages[pkg.name] = path
 
-		for _, dep in pairs(pkg.deps) do
-			package.preload[dep.name] = dofile(SCRIPT_PATH .. pkg.name .. "/" .. dep.name .. ".lua")
-		end
-
 		LoadScript(path)
 		script:close()
 	else --- script not found
@@ -368,6 +396,21 @@ local function SyncRepo()
 			end
 		end
 	end)
+
+	local repo_response = http.Get(repo_link_rest)
+
+	if repo_response then
+		---@type RepoPkg[]?
+		repo_pkgs = json.decode(repo_response)
+
+		local file = io.open("Cheese Bread/repos/standard.json", "w")
+
+		if file then
+			file:write(repo_response)
+			file:flush()
+			file:close()
+		end
+	end
 end
 
 local function ListInstalledPkgs()
