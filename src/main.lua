@@ -137,21 +137,19 @@ local function EnumerateRepoDir()
 				-- Sanity check for JSON file name matching the inner name
 				local file_name_no_ext = pkg.name:gsub("%.json$", "")
 
-				http.GetAsync(pkg.download_url, function(pkg_content_raw)
-					local pkg_content = json.decode(pkg_content_raw)
-
-					if pkg_content and pkg_content.name ~= file_name_no_ext then
-						CheeseError(
-							string.format(
-								"Name mismatch: file '%s' has 'name' field '%s'. Skipping this package",
-								pkg.name,
-								pkg_content and pkg_content.name or "?"
-							)
+				local pkg_content_raw = http.Get(pkg.download_url)
+				local pkg_content = json.decode(pkg_content_raw)
+				if pkg_content and pkg_content.name ~= file_name_no_ext then
+					CheeseError(
+						string.format(
+							"Name mismatch: file '%s' has 'name' field '%s'. Skipping this package",
+							pkg.name,
+							pkg_content and pkg_content.name or "?"
 						)
-					else
-						repo_pkgs[#repo_pkgs + 1] = pkg
-					end
-				end)
+					)
+				else
+					repo_pkgs[#repo_pkgs + 1] = pkg
+				end
 			end
 
 			file:close()
