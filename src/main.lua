@@ -39,6 +39,15 @@ cb | cb help
 printc(120, 217, 255, 255, "Cheese bread is starting")
 printc(255, 171, 226, 255, "This may freeze your game for a few seconds")
 
+local json_link = "https://raw.githubusercontent.com/LuaDist/dkjson/refs/heads/master/dkjson.lua"
+
+---@type JSON?
+local json = load(http.Get(json_link))()
+
+if not json then
+	return
+end
+
 ---@type table<string, Package>
 local installed_packages = {}
 
@@ -56,52 +65,6 @@ filesystem.CreateDirectory("Cheese Bread/packages")
 filesystem.CreateDirectory("Cheese Bread/scripts")
 filesystem.CreateDirectory("Cheese Bread/repos")
 
-local json_link = "https://raw.githubusercontent.com/rxi/json.lua/dbf4b2dd2eb7c23be2773c89eb059dadd6436f94/json.lua"
-
----@type JSON?
-local json = load(http.Get(json_link))()
-
-if not json then
-	return
-end
-
---- is this behavior that might bite me in the ass later? yes, absolutely
-local custom_require_unformatted = [[
-local function require(name)
-    local file = io.open("Cheese Bread/scripts/" .. "%s" .. "/".. tostring(name) ..".lua")
-
-    if file then
-        local chunk = load(file:read("a"))
-        if chunk then
-            local success, result = pcall(chunk)
-            if not success then
-                printc(255, 0, 0, 255, "error :" .. tostring(result))
-                return nil
-            end
-
-            return result
-        end
-        file:close()
-    end
-
-	return nil
-end
-]]
-
-local function FormatRequire(directory, filename)
-	return string.format(custom_require_unformatted, directory)
-end
-
---[[
-structure of the directory
-
-Cheese Bread:
-	packages:
-		snowflake.json
-		paimbot.json
-		...
---]]
-
 filesystem.EnumerateDirectory(PACKAGE_PATH .. "*.json", function(filename, attributes)
 	local name = filename:gsub(".json", "")
 	local path = string.format(PACKAGE_PATH .. "%s.json", name)
@@ -116,7 +79,7 @@ end)
 ---
 printc(255, 224, 140, 255, "[Cheese Bread] Getting repo packages...")
 
-local repo_link_rest = "https://api.github.com/repos/uosq/cheese-bread-pkgs/contents/"
+local repo_link_rest = "https://api.github.com/repos/uosq/cheese-bread-pkgs/contents/packages"
 
 ---@type RepoPkg[]?
 local repo_pkgs = {}
@@ -281,9 +244,6 @@ local function InstallPkg(pkg)
 					if script then
 						local script_raw = http.Get(pkg.url)
 
-						local formatted = FormatRequire(pkg.name, pkg.name)
-						script:write(formatted)
-
 						script:write(script_raw)
 						script:flush()
 						script:close()
@@ -295,7 +255,6 @@ local function InstallPkg(pkg)
 							local path = string.format("%s/%s/%s.lua", SCRIPT_PATH, pkg.name, dep.name)
 							local file = io.open(path, "w")
 							if file then
-								file:write(FormatRequire(pkg.name, dep.name))
 								file:write(http.Get(dep.url))
 								file:flush()
 								file:close()
