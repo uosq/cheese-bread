@@ -114,7 +114,6 @@ local repo_link_rest = "https://api.github.com/repos/uosq/cheese-bread-pkgs/cont
 
 ---@type RepoPkg[]?
 local repo_pkgs = {}
-local finished_fetching = false
 local repo_count = 0
 
 local function EnumerateRepoDir()
@@ -138,8 +137,7 @@ local function EnumerateRepoDir()
 				-- Sanity check for JSON file name matching the inner name
 				local file_name_no_ext = pkg.name:gsub("%.json$", "")
 
-				local pkg_content_raw = http.Get(pkg.download_url)
-				if pkg_content_raw then
+				http.GetAsync(pkg.download_url, function(pkg_content_raw)
 					local pkg_content = json.decode(pkg_content_raw)
 
 					if pkg_content and pkg_content.name ~= file_name_no_ext then
@@ -153,10 +151,7 @@ local function EnumerateRepoDir()
 					else
 						repo_pkgs[#repo_pkgs + 1] = pkg
 					end
-				else
-					--printc(255, 128, 0, 255, string.format("[Cheese Bread] Failed to download package '%s'", v.name))
-					CheeseError("Failed to download package '%s'", pkg.name)
-				end
+				end)
 			end
 
 			file:close()
@@ -165,10 +160,6 @@ local function EnumerateRepoDir()
 end
 
 EnumerateRepoDir()
-
-if repo_count > 0 then
-	finished_fetching = true
-end
 
 if repo_count == 0 then
 	local repo_response = http.Get(repo_link_rest)
@@ -184,21 +175,12 @@ if repo_count == 0 then
 			file:flush()
 			file:close()
 		end
-
-		--printc(255, 224, 140, 255, "[Cheese Bread] Success!")
-		CheeseSuccess("Success!")
-		finished_fetching = true
 	else
-		printc(255, 0, 0, 255, "[Cheese Bread] Error while fetching the repo!")
 		CheeseError("Error while fetching 'standard' repo!")
 	end
 end
 
-if finished_fetching then
-	--printc(100, 255, 100, 255, "[Cheese Bread] Finished loading", "Use command 'cb'")
-	CheeseSuccess("Finished loading", "Use command 'cb' or 'cb help' to start")
-end
-
+CheeseSuccess("Finished loading", "Use command 'cheese' or 'cheese help' to start")
 ---
 
 --- Returns the raw pkg from the local repo
@@ -220,6 +202,7 @@ local function GetPkgFromRepo(name)
 	local selected_pkg = nil
 
 	--- this probably wont scale well if we have hundreds or thousands of packages
+	--- i wanted this to be async, but http.GetAsync doesn't return the full data
 	for i = 1, #repo_pkgs do
 		local pkg = repo_pkgs[i]
 		if pkg and pkg.name == (name .. ".json") then
@@ -244,7 +227,6 @@ local function InstallPkg(pkg)
 	end
 
 	if installed_packages[pkg.name] then
-		--printc(255, 224, 140, 255, "[Cheese Bread] Package '" .. pkg.name .. "' is already installed!")
 		CheeseWarn(string.format("The package '%s' is already installed!", pkg.name))
 		return
 	end
@@ -329,11 +311,9 @@ local function RemovePkg(pkg)
 		end
 
 		installed_packages[pkg.name] = nil
-		--printc(140, 255, 167, 255, "[Cheese Bread] Package '" .. pkg.name .. "' was removed")
 		CheeseSuccess(string.format("Package '%s' removed", pkg.name))
 	else
 		installed_packages[pkg.name] = nil --- just in case its still in memory
-		--printc(255, 0, 0, 255, "[Cheese Bread] Package '" .. pkg.name .. "' not found or already removed")
 		CheeseWarn(string.format("Package '%s' not found or already removed", pkg.name))
 	end
 end
@@ -345,7 +325,6 @@ local function RunPkg(pkg)
 	end
 
 	if running_packages[pkg.name] then
-		--printc(255, 100, 100, 255, string.format("[Cheese Bread] The package '%s' is already running!", pkg.name))
 		CheeseWarn(string.format("The package '%s' is already running!"))
 		return
 	end
@@ -353,13 +332,11 @@ local function RunPkg(pkg)
 	local path = SCRIPT_PATH .. pkg.name .. "/" .. pkg.name .. ".lua"
 	local script = io.open(path)
 	if script then
-		--running_packages[pkg.name] = path
-		--LoadScript(path)
+		running_packages[pkg.name] = path
+		LoadScript(path)
 		script:close()
-		--printc(100, 255, 100, 255, string.format("The package '%s' started", pkg.name))
 		CheeseSuccess(string.format("The package '%s' started", pkg.name))
 	else --- script not found
-		--printc(255, 0, 0, 255, "Package '" .. pkg.name .. "' not found! Try reinstalling it")
 		CheeseWarn(string.format("Package '%s' not found! Try reinstalling it"))
 	end
 end
@@ -370,13 +347,11 @@ local function StopPkg(pkg)
 		UnloadScript(running_packages[pkg.name])
 		running_packages[pkg.name] = nil
 	else
-		--printc(255, 0, 0, 255, string.format("[Cheese Bread] The package '%s' is not running", pkg.name))
 		CheeseWarn(string.format("The package '%s' is already stopped", pkg.name))
 	end
 end
 
 local function SyncRepo()
-	--printc(140, 255, 251, 255, "[Cheese Bread] Fetching repo...")
 	local repo_response = http.Get(repo_link_rest)
 
 	CheesePrint("Fetching repo")
@@ -419,7 +394,6 @@ local function ListInstalledPkgs()
 
 	local text = "--> %s | %s"
 
-	--printc(190, 140, 255, 255, "Installed packages:")
 	CheeseGeneric(190, 140, 255, "Installed packages:")
 
 	for _, pkg in pairs(installed_packages) do
@@ -463,10 +437,8 @@ local function ListRepoPkgs()
 end
 
 local function ListRunningPkgs()
-	--printc(190, 140, 255, 255, "Currently running packages:")
 	CheeseGeneric(190, 140, 255, "Currently running packages:")
 	for name in pairs(running_packages) do
-		--printc(255, 255, 255, 255, "--> " .. name)
 		printc(255, 255, 255, 255, string.format("--> %s", name))
 	end
 end
@@ -522,7 +494,6 @@ local function RunShell(str)
 		elseif words[3] == "runpkgs" then
 			ListRunningPkgs()
 		else
-			--printc(255, 0, 0, 255, "[Cheese Bread] Wrong list! Options: repopkgs, localpkgs or runpkgs")
 			CheeseError("Wrong list! Options available: repopkgs, localpkgs or runpkgs")
 			return
 		end
@@ -530,10 +501,10 @@ local function RunShell(str)
 		if words[2] == "sync" then
 			SyncRepo()
 		else
-			local pkg = GetPkgFromRepo(table.concat(words, " ", 3))
+			local pkg_name = table.concat(words, " ", 3)
+			local pkg = GetPkgFromRepo(pkg_name)
 			if not pkg then
-				--printc(255, 0, 0, 255, string.format("[Cheese Bread] The package '%s' was not found!", words[3]))
-				CheeseError(string.format("The package '%s' was not found!"))
+				CheeseError(string.format("The package '%s' was not found!", pkg_name))
 				return
 			end
 
