@@ -450,7 +450,7 @@ local function Help()
 	printc(255, 255, 255, 255, "--> cheese run pkg")
 	printc(255, 255, 255, 255, "--> cheese stop pkg")
 	printc(255, 255, 255, 255, "--> cheese list repopkgs/localpkgs/runpkgs")
-	printc(255, 255, 255, 255, "--> cheese / cb help (both are the same thing)")
+	printc(255, 255, 255, 255, "--> cheese / cheese help (both do the same thing)")
 	printc(255, 255, 255, 255, "--> cheese sync")
 	printc(148, 148, 148, 255, "-------------------")
 	printc(
@@ -514,6 +514,8 @@ local function RunShell(str)
 				RunPkg(pkg)
 			elseif words[2] == "stop" then
 				StopPkg(pkg)
+			else
+				CheeseWarn("Invalid command!")
 			end
 		end
 	end
