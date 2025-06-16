@@ -463,6 +463,24 @@ local function Help()
 	)
 end
 
+local function Unload()
+	json = nil
+	---@diagnostic disable-next-line: cast-local-type
+	installed_packages = nil
+	repo_pkgs = nil
+
+	for i, pkg in ipairs(running_packages) do
+		UnloadScript(pkg)
+	end
+
+	---@diagnostic disable-next-line: cast-local-type
+	running_packages = nil
+
+	CheeseSuccess("Cheese Bread unloaded successfully")
+
+	collectgarbage("collect")
+end
+
 ---@param str StringCmd
 local function RunShell(str)
 	local full_text = str:Get()
@@ -486,7 +504,7 @@ local function RunShell(str)
 	if words[2] == nil or words[2] == "" or words[2] == "help" then
 		Help()
 	elseif words[2] == "unload" then
-		callbacks.Unregister("SendStringCmd", "Cheese Bread Shell")
+		Unload()
 		return
 	elseif words[2] == "list" then
 		if words[3] == "repopkgs" then
@@ -523,24 +541,6 @@ local function RunShell(str)
 			end
 		end
 	end
-end
-
-local function Unload()
-	json = nil
-	---@diagnostic disable-next-line: cast-local-type
-	installed_packages = nil
-	repo_pkgs = nil
-
-	for i, pkg in ipairs(running_packages) do
-		UnloadScript(pkg)
-	end
-
-	---@diagnostic disable-next-line: cast-local-type
-	running_packages = nil
-
-	CheeseSuccess("Cheese Bread unloaded successfully")
-
-	collectgarbage("collect")
 end
 
 callbacks.Unregister("SendStringCmd", "Cheese Bread Shell")
