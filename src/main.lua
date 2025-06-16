@@ -64,6 +64,7 @@ filesystem.CreateDirectory("Cheese Bread")
 filesystem.CreateDirectory("Cheese Bread/packages")
 filesystem.CreateDirectory("Cheese Bread/scripts")
 filesystem.CreateDirectory("Cheese Bread/repos")
+filesystem.CreateDirectory("Cheese Bread/temp")
 
 --- these names are hilarious lol
 
