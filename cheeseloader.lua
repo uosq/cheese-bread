@@ -8,6 +8,6 @@ local data = http.Get(MAIN_FILE_LINK)
 if data then
 	local script = load(data)
 	if script then
-		pcall(script)
+		script()
 	end
 end
