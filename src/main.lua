@@ -452,6 +452,7 @@ local function Help()
 	printc(255, 255, 255, 255, "--> cheese list repopkgs/localpkgs/runpkgs")
 	printc(255, 255, 255, 255, "--> cheese / cheese help (both do the same thing)")
 	printc(255, 255, 255, 255, "--> cheese sync")
+	printc(255, 255, 255, 255, "--> cheese unload")
 	printc(148, 148, 148, 255, "-------------------")
 	printc(
 		161,
@@ -484,6 +485,9 @@ local function RunShell(str)
 	--- its only "cb", which means cb help
 	if words[2] == nil or words[2] == "" or words[2] == "help" then
 		Help()
+	elseif words[2] == "unload" then
+		callbacks.Unregister("SendStringCmd", "Cheese Bread Shell")
+		return
 	elseif words[2] == "list" then
 		if words[3] == "repopkgs" then
 			ListRepoPkgs()
@@ -539,5 +543,6 @@ local function Unload()
 	collectgarbage("collect")
 end
 
+callbacks.Unregister("SendStringCmd", "Cheese Bread Shell")
 callbacks.Register("SendStringCmd", "Cheese Bread Shell", RunShell)
 callbacks.Register("Unload", Unload)
