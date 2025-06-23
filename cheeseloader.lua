@@ -8,7 +8,6 @@ local output = "Cheese Bread/temp/cheese-bread.lua"
 
 if data then
 	local file = io.open(output, "w")
-
 	if file then
 		file:write(data)
 		file:flush()
@@ -19,4 +18,5 @@ end
 
 callbacks.Register("Unload", function()
 	UnloadScript(output)
+	os.remove("Cheese Bread/temp/cheese-bread.lua")
 end)
