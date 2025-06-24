@@ -115,12 +115,12 @@ local repo_link_rest = "https://api.github.com/repos/uosq/cheese-bread-pkgs/cont
 
 ---@type RepoPkg[]?
 local repo_pkgs = {}
-local repo_count = 0
 
-local function EnumerateRepoDir()
-	repo_count = 0
+local function LoadRepositories()
+	local count = 0
+
 	filesystem.EnumerateDirectory(REPOS_PATH .. "*.json", function(filename, attributes)
-		repo_count = repo_count + 1
+		count = count + 1
 
 		local path = REPOS_PATH .. filename
 		local file = io.open(path)
@@ -156,11 +156,11 @@ local function EnumerateRepoDir()
 			file:close()
 		end
 	end)
+
+	return count
 end
 
-EnumerateRepoDir()
-
-if repo_count == 0 then
+if LoadRepositories() == 0 then
 	local repo_response = http.Get(repo_link_rest)
 
 	if repo_response then
@@ -212,10 +212,11 @@ local function GetPkgFromRepo(name)
 				selected_pkg = pkg_content
 			end
 
-			break
+			--- we dont need to look for the other ones
+			goto _breakloop
 		end
 	end
-
+	::_breakloop::
 	return selected_pkg
 end
 
@@ -232,14 +233,11 @@ local function InstallPkg(pkg)
 
 	--- package is not installed
 	--- so we can install it know
-	for i = 1, #repo_pkgs do
-		local this = repo_pkgs[i]
 
+	for _, this in pairs(repo_pkgs) do
 		local name = this.name:gsub(".json", "")
 
-		if
-			this and pkg.name == name --[[string.find(pkg.name, this.name:gsub(".json", ""))]]
-		then
+		if this and pkg.name == name then
 			local path = string.format(PACKAGE_PATH .. "%s.json", this.name:gsub(".json", ""))
 
 			installed_packages[pkg.name] = pkg
@@ -268,8 +266,8 @@ local function InstallPkg(pkg)
 					--- install dependencies
 					if pkg.deps and #pkg.deps > 0 then
 						for _, dep in ipairs(pkg.deps) do
-							local path = string.format("%s/%s/%s.lua", SCRIPT_PATH, pkg.name, dep.name)
-							local file = io.open(path, "w")
+							local dep_path = string.format("%s/%s/%s.lua", SCRIPT_PATH, pkg.name, dep.name)
+							local file = io.open(dep_path, "w")
 							if file then
 								file:write(http.Get(dep.url))
 								file:flush()
@@ -282,7 +280,8 @@ local function InstallPkg(pkg)
 				end
 			end
 
-			break
+			--- dont even need to break the loop, just return
+			return
 		end
 	end
 end
@@ -356,7 +355,7 @@ local function SyncRepo()
 	CheesePrint("Fetching repo")
 	repo_pkgs = {}
 
-	EnumerateRepoDir()
+	LoadRepositories()
 
 	filesystem.EnumerateDirectory(SCRIPT_PATH .. "*.lua", function(filename, attributes)
 		local pkg = GetPkgFromRepo(filename:gsub(".json", ""))
